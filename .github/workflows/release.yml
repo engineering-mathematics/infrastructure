@@ -1,0 +1,81 @@
+name: Release
+
+# Tag `<pkg>-vX.Y.Z` (e.g. core-v0.1.0); the version must match packages/<pkg>/pyproject.toml.
+# One Trusted Publisher per PyPI project: workflow `release.yml`, environment `pypi`.
+on:
+  push:
+    tags: ["core-v*", "units-v*", "viz-v*", "devtools-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      dist: ${{ steps.parse.outputs.dist }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - id: parse
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          pkg="${TAG%%-v*}"
+          ver="${TAG#*-v}"
+          case "$pkg" in core|units|viz|devtools) ;; *) echo "::error::unknown package in tag $TAG"; exit 1 ;; esac
+          actual="$(python3 -c "import tomllib; print(tomllib.load(open('packages/$pkg/pyproject.toml','rb'))['project']['version'])")"
+          if [ "$actual" != "$ver" ]; then
+            echo "::error::tag version $ver != packages/$pkg/pyproject.toml version $actual"
+            exit 1
+          fi
+          echo "dist=engg-math-$pkg" >> "$GITHUB_OUTPUT"
+
+  ci:
+    needs: meta
+    uses: engineering-mathematics/.github/.github/workflows/python-ci.yml@main
+    with:
+      sync-args: --all-packages
+      build-args: --all-packages
+      export-args: --all-packages --no-emit-workspace
+
+  build:
+    needs: [meta, ci]
+    uses: engineering-mathematics/.github/.github/workflows/python-build.yml@main
+    with:
+      sync-args: --all-packages
+      build-args: --package ${{ needs.meta.outputs.dist }}
+      export-args: --package ${{ needs.meta.outputs.dist }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+  publish:
+    needs: [meta, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ needs.meta.outputs.dist }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: dist, path: dist/ }
+      - name: Keep the SBOM out of the PyPI upload (attached to the GitHub release)
+        run: rm dist/sbom.cdx.json
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: dist, path: dist/ }
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          files: dist/*
+          generate_release_notes: true

@@ -1,0 +1,142 @@
+# Workspace root (not published). Members: packages/*.
+[project]
+name = "engg-math-infrastructure"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+engg-math-core = { workspace = true }
+engg-math-units = { workspace = true }
+engg-math-viz = { workspace = true }
+engg-math-devtools = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "engg-math-core",
+    "engg-math-units",
+    "engg-math-viz",
+    "engg-math-devtools",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "pytest-benchmark>=5.0",
+    "hypothesis>=6.120",
+    "mypy>=1.13",
+    "ruff>=0.8",
+    "import-linter>=2.1",
+    "pip-audit>=2.7",
+    "twine>=6.0",
+]
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = [
+    "packages/core/src", "packages/units/src", "packages/viz/src", "packages/devtools/src",
+    "packages/core/tests", "packages/units/tests", "packages/viz/tests", "packages/devtools/tests",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "A", "C4", "C90", "SIM", "RUF", "PL", "PT",
+    "S", "ANN", "D", "TCH", "PERF", "NPY", "FURB", "ERA", "T20", "TRY", "EM", "PGH",
+    "ARG", "RET", "PIE", "FA", "ISC", "ICN", "TID", "PTH", "SLF", "FLY",
+]
+ignore = ["D203", "D213", "TRY003", "EM101", "EM102", "COM812", "ISC001"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.isort]
+known-first-party = ["engg_math"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "parents"
+
+# Banned: explicit inverse/determinant. Use factorisation-based solves.
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"numpy.linalg.inv" = { msg = "Use a factorisation-based solve." }
+"numpy.linalg.pinv" = { msg = "Use the SVD-based least-squares solver." }
+"numpy.linalg.det" = { msg = "Use a log-determinant from a factorisation." }
+"numpy.matrix" = { msg = "np.matrix is deprecated." }
+"scipy.linalg.inv" = { msg = "Use a factorisation-based solve." }
+"scipy.linalg.pinv" = { msg = "Use the SVD-based least-squares solver." }
+"scipy.linalg.det" = { msg = "Use a log-determinant from a factorisation." }
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "ANN", "D", "PLR2004", "SLF001", "ARG"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+strict = true
+files = ["packages"]
+mypy_path = "packages/core/src:packages/units/src:packages/viz/src:packages/devtools/src"
+namespace_packages = true
+explicit_package_bases = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+# ---------------------------------------------------------------- pytest / coverage
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["packages"]
+addopts = """-ra --strict-markers --strict-config --import-mode=importlib \
+--cov=engg_math.core --cov=engg_math.units --cov=engg_math.viz --cov=engg_math.devtools \
+--cov-report=term-missing --cov-fail-under=90"""
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
+
+# ---------------------------------------------------------------- import-linter
+[tool.importlinter]
+root_packages = ["engg_math.core", "engg_math.units", "engg_math.viz", "engg_math.devtools"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layering: devtools > viz | units > core"
+type = "layers"
+layers = ["engg_math.devtools", "engg_math.viz | engg_math.units", "engg_math.core"]
+
+[[tool.importlinter.contracts]]
+name = "core depends on NumPy only"
+type = "forbidden"
+source_modules = ["engg_math.core"]
+forbidden_modules = ["pint", "rich", "scipy", "matplotlib", "plotext", "networkx", "yaml", "typer"]
+
+[[tool.importlinter.contracts]]
+name = "Cross-package imports use the top-level API only (units)"
+type = "forbidden"
+source_modules = ["engg_math.units"]
+forbidden_modules = ["engg_math.core.*"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Cross-package imports use the top-level API only (viz)"
+type = "forbidden"
+source_modules = ["engg_math.viz"]
+forbidden_modules = ["engg_math.core.*"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Cross-package imports use the top-level API only (devtools)"
+type = "forbidden"
+source_modules = ["engg_math.devtools"]
+forbidden_modules = ["engg_math.core.*", "engg_math.units.*", "engg_math.viz.*"]
+allow_indirect_imports = true

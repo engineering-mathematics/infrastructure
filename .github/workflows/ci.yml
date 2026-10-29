@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: engineering-mathematics/.github/.github/workflows/python-ci.yml@main
+    with:
+      sync-args: --all-packages
+      build-args: --all-packages
+      export-args: --all-packages --no-emit-workspace
+  security:
+    uses: engineering-mathematics/.github/.github/workflows/python-security.yml@main
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
